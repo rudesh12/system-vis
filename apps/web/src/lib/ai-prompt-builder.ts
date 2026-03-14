@@ -195,6 +195,7 @@ OUTPUT FORMAT: You MUST respond with ONLY valid JSON matching this exact schema.
         "failureRate": <number between 0 and 1>,
         "maxConcurrentRequests": <number>,
         "healthStatus": "healthy",
+        "tooltip": "<short hover tooltip: what it is, primary use, and one key scaling concern>",
         ... <type-specific fields>,
         "requestResponseTemplate": {
           "requestTemplate": {
@@ -237,6 +238,7 @@ OUTPUT FORMAT: You MUST respond with ONLY valid JSON matching this exact schema.
 }
 
 TYPE-SPECIFIC DATA FIELDS:
+- tooltip (hover): short string describing what the component is used for and one key scaling/reliability concern
 - cdn: cacheHitRate (0-1), regions (string[])
 - load_balancer: algorithm ("round_robin"|"least_connections"|"ip_hash"|"weighted"), healthCheckIntervalMs
 - frontend, auth_service, order_service, custom_service: instances, cpuPerInstance, memoryPerInstanceMB, autoScale (bool), autoScaleThreshold
@@ -291,3 +293,5 @@ ${constraints ? `ADDITIONAL CONSTRAINTS: ${constraints}` : ''}
 
 USER REQUEST: ${description}`;
 }
+
+

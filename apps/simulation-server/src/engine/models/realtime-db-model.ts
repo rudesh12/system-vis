@@ -1,60 +1,85 @@
-import { SimEvent, SimEventType } from '@system-vis/shared';
-import { ComponentModel } from '../component-model.js';
-import { sampleNormal } from '../component-model.js';
+import { SimEventType, type SimEvent, type RealTimeDBNodeProps } from '@system-vis/shared';
+import { ComponentModel, sampleNormal } from '../component-model.js';
 
 export class RealTimeDBModel extends ComponentModel {
   private activeSubscriptions = 0;
 
   handleEvent(event: SimEvent): SimEvent[] {
     switch (event.type) {
-      case SimEventType.REQUEST_ARRIVE: {
-        // Real-time database operation (read/write/subscribe)
-        if (this.state.activeRequests >= (this.config.maxConcurrentRequests || 10000)) {
+      case SimEventType.REQUEST_ARRIVE:
+      case SimEventType.REQUEST_ROUTE: {
+        const config = this.config as RealTimeDBNodeProps;
+        const totalCapacity = Math.min(
+          Math.max(1, config.maxConcurrentRequests),
+          Math.max(1, config.maxConnections)
+        );
+
+        if (this.state.activeRequests >= totalCapacity) {
           this.state.totalFailed++;
           return [];
         }
 
-        if (Math.random() < (this.config.failureRate || 0.002)) {
-          this.state.totalFailed++;
-          return [];
-        }
-
-        const opTime = sampleNormal(this.config.baseLatencyMs, this.config.latencyStdDevMs);
         this.state.activeRequests++;
+        this.updateUtilization();
 
-        // Track subscriptions (long-lived connections)
+        // Track subscriptions (long-lived connections) roughly.
         if (Math.random() < 0.3) {
           this.activeSubscriptions++;
         }
 
-        const completeEvent: SimEvent = {
-          id: `evt_rtdb_${event.requestId}`,
-          type: SimEventType.REQUEST_COMPLETE as any,
+        const baseTime = sampleNormal(config.baseLatencyMs, config.latencyStdDevMs);
+        const replicationTime = sampleNormal(
+          Math.max(1, config.replicationLatencyMs),
+          Math.max(1, config.replicationLatencyMs) * 0.3
+        );
+        const opTime = baseTime + replicationTime;
+
+        if (this.shouldFail()) {
+          return [{
+            id: `evt_rtdb_fail_${event.requestId}`,
+            type: SimEventType.REQUEST_FAIL,
+            timestamp: event.timestamp + opTime,
+            requestId: event.requestId,
+            nodeId: event.nodeId,
+            metadata: { subscriptions: this.activeSubscriptions },
+          }];
+        }
+
+        return [{
+          id: `evt_rtdb_end_${event.requestId}`,
+          type: SimEventType.REQUEST_PROCESS_END,
           timestamp: event.timestamp + opTime,
           requestId: event.requestId,
-          nodeId: this.config.label || 'realtime-db',
-          metadata: {
-            success: true,
-            subscriptions: this.activeSubscriptions,
-            replicated: true,
-          },
-        };
-
-        return [completeEvent];
+          nodeId: event.nodeId,
+          metadata: { arrivalTime: event.timestamp, subscriptions: this.activeSubscriptions },
+        }];
       }
 
-      case SimEventType.REQUEST_COMPLETE: {
-        this.state.activeRequests--;
+      case SimEventType.REQUEST_PROCESS_END: {
+        this.state.activeRequests = Math.max(0, this.state.activeRequests - 1);
         this.state.totalProcessed++;
 
-        // Occasional subscription cleanup
+        const arrivalTime = (event.metadata?.arrivalTime as number | undefined) ?? event.timestamp;
+        this.state.completedLatencies.push(event.timestamp - arrivalTime);
+
+        // Occasional subscription cleanup.
         if (Math.random() < 0.05) {
           this.activeSubscriptions = Math.max(0, this.activeSubscriptions - 1);
         }
 
-        const latencies = [...this.state.completedLatencies];
-        latencies.push(sampleNormal(this.config.baseLatencyMs, this.config.latencyStdDevMs));
-        this.state.completedLatencies = latencies.slice(-1000);
+        this.updateUtilization();
+        return this.routeToDownstream(event.requestId, event.timestamp);
+      }
+
+      case SimEventType.REQUEST_FAIL: {
+        this.state.activeRequests = Math.max(0, this.state.activeRequests - 1);
+        this.state.totalFailed++;
+
+        if (Math.random() < 0.05) {
+          this.activeSubscriptions = Math.max(0, this.activeSubscriptions - 1);
+        }
+
+        this.updateUtilization();
         return [];
       }
 

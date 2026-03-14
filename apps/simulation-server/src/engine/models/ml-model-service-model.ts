@@ -1,45 +1,60 @@
-import { SimEvent, SimEventType } from '@system-vis/shared';
-import { ComponentModel } from '../component-model.js';
-import { sampleNormal } from '../component-model.js';
+import { SimEventType, type SimEvent, type MLModelServiceNodeProps } from '@system-vis/shared';
+import { ComponentModel, sampleNormal } from '../component-model.js';
 
 export class MLModelServiceModel extends ComponentModel {
   handleEvent(event: SimEvent): SimEvent[] {
     switch (event.type) {
-      case SimEventType.REQUEST_ARRIVE: {
-        // Inference request
-        if (this.state.activeRequests >= (this.config.maxConcurrentRequests || 500)) {
-          // Capacity exceeded
+      case SimEventType.REQUEST_ARRIVE:
+      case SimEventType.REQUEST_ROUTE: {
+        const config = this.config as MLModelServiceNodeProps;
+        const totalCapacity = config.instances * config.maxConcurrentRequests;
+
+        if (this.state.activeRequests >= totalCapacity) {
           this.state.totalFailed++;
           return [];
         }
 
-        if (Math.random() < (this.config.failureRate || 0)) {
-          this.state.totalFailed++;
-          return [];
-        }
-
-        const inferenceTime = sampleNormal(this.config.baseLatencyMs, this.config.latencyStdDevMs);
         this.state.activeRequests++;
+        this.updateUtilization();
 
-        const completeEvent: SimEvent = {
-          id: `evt_ml_complete_${event.requestId}`,
-          type: SimEventType.REQUEST_COMPLETE as any,
+        const mean = Math.max(1, config.inferenceLatencyMs ?? config.baseLatencyMs);
+        const inferenceTime = sampleNormal(mean, config.latencyStdDevMs);
+
+        if (this.shouldFail()) {
+          return [{
+            id: `evt_ml_fail_${event.requestId}`,
+            type: SimEventType.REQUEST_FAIL,
+            timestamp: event.timestamp + inferenceTime,
+            requestId: event.requestId,
+            nodeId: event.nodeId,
+          }];
+        }
+
+        return [{
+          id: `evt_ml_end_${event.requestId}`,
+          type: SimEventType.REQUEST_PROCESS_END,
           timestamp: event.timestamp + inferenceTime,
           requestId: event.requestId,
-          nodeId: this.config.label || 'ml-service',
-          metadata: { success: true, prediction: Math.random() },
-        };
-
-        return [completeEvent];
+          nodeId: event.nodeId,
+          metadata: { arrivalTime: event.timestamp },
+        }];
       }
 
-      case SimEventType.REQUEST_COMPLETE: {
-        this.state.activeRequests--;
+      case SimEventType.REQUEST_PROCESS_END: {
+        this.state.activeRequests = Math.max(0, this.state.activeRequests - 1);
         this.state.totalProcessed++;
 
-        const latencies = [...this.state.completedLatencies];
-        latencies.push(sampleNormal(this.config.baseLatencyMs, this.config.latencyStdDevMs));
-        this.state.completedLatencies = latencies.slice(-1000);
+        const arrivalTime = (event.metadata?.arrivalTime as number | undefined) ?? event.timestamp;
+        this.state.completedLatencies.push(event.timestamp - arrivalTime);
+        this.updateUtilization();
+
+        return this.routeToDownstream(event.requestId, event.timestamp);
+      }
+
+      case SimEventType.REQUEST_FAIL: {
+        this.state.activeRequests = Math.max(0, this.state.activeRequests - 1);
+        this.state.totalFailed++;
+        this.updateUtilization();
         return [];
       }
 

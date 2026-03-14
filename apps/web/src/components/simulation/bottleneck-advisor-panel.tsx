@@ -113,7 +113,7 @@ export function BottleneckAdvisorPanel() {
           />
         }
       >
-        🧠 AI Optimize
+        AI Optimize
       </SheetTrigger>
       <SheetContent className="w-[460px] sm:w-[580px]">
         <SheetHeader>
@@ -123,7 +123,7 @@ export function BottleneckAdvisorPanel() {
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-4 space-y-4">
+        <div className="px-4 mt-4 space-y-4">
           {/* Current bottleneck summary */}
           <div className="rounded-lg border bg-muted/50 p-3">
             <div className="text-xs font-medium text-muted-foreground mb-2">
@@ -157,7 +157,7 @@ export function BottleneckAdvisorPanel() {
                   Analyzing bottlenecks...
                 </span>
               ) : (
-                '✨ Analyze & Generate Optimized Architecture'
+                'Analyze & Generate Optimized Architecture'
               )}
             </Button>
           )}
@@ -248,14 +248,14 @@ export function BottleneckAdvisorPanel() {
                 {/* Actions */}
                 <div className="space-y-2">
                   <Button className="w-full" onClick={handleApply}>
-                    🚀 Apply Optimized Architecture
+                    Apply Optimized Architecture
                   </Button>
                   <Button
                     className="w-full"
                     variant="outline"
                     onClick={handleApplyAndArchitect}
                   >
-                    ✏️ Apply & Edit in Architect
+                    Apply & Edit in Architect
                   </Button>
                   <Button
                     className="w-full"

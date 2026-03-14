@@ -1,9 +1,30 @@
 import { ArchNodeType } from '../types/node-types';
+export const NODE_TOOLTIPS: Record<ArchNodeType, string> = {
+  [ArchNodeType.CDN]: `Caches static assets and edge responses close to users.\nUse it to reduce latency and offload your origin.\nWatch: cache invalidation, TTLs, and purge strategy.`,
+  [ArchNodeType.LOAD_BALANCER]: `Distributes traffic across service instances and removes unhealthy targets.\nUse it for horizontal scaling and high availability.\nWatch: health checks, timeouts, retries, and sticky sessions.`,
+  [ArchNodeType.FRONTEND]: `User-facing web/mobile client layer.\nUse it to render UI and call backend APIs.\nWatch: caching, bundle size, and error handling.`,
+  [ArchNodeType.API_GATEWAY]: `Single entry point for APIs: auth, routing, rate limiting, and observability.\nUse it to centralize cross-cutting concerns.\nWatch: added latency and being a choke point.`,
+  [ArchNodeType.AUTH_SERVICE]: `Identity and access management for users/services.\nUse it for login, tokens, and authorization decisions.\nWatch: rate limiting, MFA, token revocation, and secure secret storage.`,
+  [ArchNodeType.ORDER_SERVICE]: `Core domain service that owns order/business workflows.\nUse it to coordinate writes and state transitions.\nWatch: idempotency, sagas/transactions, and consistency guarantees.`,
+  [ArchNodeType.CUSTOM_SERVICE]: `Generic business logic service.\nUse it to encapsulate a bounded context or feature area.\nWatch: statelessness, backpressure, and horizontal scaling.`,
+  [ArchNodeType.DATABASE]: `Primary persistent data store (SQL/NoSQL).\nUse it for durable state and queries.\nWatch: write bottlenecks, indexing, backups, replication, and connection limits.`,
+  [ArchNodeType.CACHE]: `In-memory cache for hot reads and shared state (sessions, rate limits).\nUse it to reduce database load and latency.\nWatch: eviction policy, cache stampedes, and consistency/staleness.`,
+  [ArchNodeType.QUEUE]: `Async messaging / job buffer (Kafka/RabbitMQ/SQS).\nUse it to decouple services and absorb traffic spikes.\nWatch: retries, idempotent consumers, DLQs, and partitions vs consumer parallelism.`,
+  [ArchNodeType.WEBSOCKET_SERVER]: `Maintains long-lived real-time connections for push updates.\nUse it for chat, presence, and live dashboards.\nWatch: connection limits, fanout, sticky routing, and backpressure.`,
+  [ArchNodeType.SEARCH_ENGINE]: `Full-text search and indexing engine.\nUse it for fast text queries and filtering at scale.\nWatch: indexing lag, shard sizing, and replica strategy.`,
+  [ArchNodeType.STREAM_PROCESSOR]: `Processes continuous event streams into derived state/analytics.\nUse it for feeds, aggregations, and real-time pipelines.\nWatch: state management, reprocessing, and scaling with partitions.`,
+  [ArchNodeType.ML_MODEL_SERVICE]: `Online inference service for ML predictions.\nUse it for recommendations, ranking, fraud, personalization.\nWatch: tail latency, batching, model versioning, and GPU/CPU capacity.`,
+  [ArchNodeType.PAYMENT_GATEWAY]: `External payment provider integration.\nUse it to charge cards, handle refunds, and manage payment intents.\nWatch: idempotency keys, webhook verification, and retry semantics.`,
+  [ArchNodeType.NOTIFICATION_SERVICE]: `Delivers email/SMS/push/webhook notifications.\nUse it for user communication and events.\nWatch: provider rate limits, retries, and deliverability.`,
+  [ArchNodeType.ANALYTICS_SERVICE]: `Aggregates events into reports/warehouse outputs.\nUse it for BI dashboards and trend analysis.\nWatch: cost, data freshness (ETL lag), and schema evolution.`,
+  [ArchNodeType.REAL_TIME_DB]: `Real-time sync database for subscriptions and live data.\nUse it when clients need instant updates without polling.\nWatch: bandwidth, fanout hotspots, and conflict/consistency behavior.`,
+};
 
 // Simplified type - just a record mapping node types to their default properties
 export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   [ArchNodeType.CDN]: {
     nodeType: ArchNodeType.CDN,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.CDN],
     maxRPS: 100000,
     baseLatencyMs: 5,
     latencyStdDevMs: 2,
@@ -14,6 +35,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.LOAD_BALANCER]: {
     nodeType: ArchNodeType.LOAD_BALANCER,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.LOAD_BALANCER],
     maxRPS: 50000,
     baseLatencyMs: 2,
     latencyStdDevMs: 1,
@@ -24,6 +46,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.FRONTEND]: {
     nodeType: ArchNodeType.FRONTEND,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.FRONTEND],
     maxRPS: 10000,
     baseLatencyMs: 15,
     latencyStdDevMs: 5,
@@ -37,6 +60,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.API_GATEWAY]: {
     nodeType: ArchNodeType.API_GATEWAY,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.API_GATEWAY],
     maxRPS: 20000,
     baseLatencyMs: 10,
     latencyStdDevMs: 3,
@@ -48,6 +72,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.AUTH_SERVICE]: {
     nodeType: ArchNodeType.AUTH_SERVICE,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.AUTH_SERVICE],
     maxRPS: 5000,
     baseLatencyMs: 25,
     latencyStdDevMs: 10,
@@ -61,6 +86,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.ORDER_SERVICE]: {
     nodeType: ArchNodeType.ORDER_SERVICE,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.ORDER_SERVICE],
     maxRPS: 3000,
     baseLatencyMs: 50,
     latencyStdDevMs: 20,
@@ -74,6 +100,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.CUSTOM_SERVICE]: {
     nodeType: ArchNodeType.CUSTOM_SERVICE,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.CUSTOM_SERVICE],
     maxRPS: 5000,
     baseLatencyMs: 30,
     latencyStdDevMs: 10,
@@ -87,6 +114,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.DATABASE]: {
     nodeType: ArchNodeType.DATABASE,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.DATABASE],
     maxRPS: 2000,
     baseLatencyMs: 5,
     latencyStdDevMs: 3,
@@ -100,6 +128,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.CACHE]: {
     nodeType: ArchNodeType.CACHE,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.CACHE],
     maxRPS: 50000,
     baseLatencyMs: 1,
     latencyStdDevMs: 0.5,
@@ -113,6 +142,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.QUEUE]: {
     nodeType: ArchNodeType.QUEUE,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.QUEUE],
     maxRPS: 10000,
     baseLatencyMs: 3,
     latencyStdDevMs: 1,
@@ -126,6 +156,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.WEBSOCKET_SERVER]: {
     nodeType: ArchNodeType.WEBSOCKET_SERVER,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.WEBSOCKET_SERVER],
     maxRPS: 50000,
     baseLatencyMs: 2,
     latencyStdDevMs: 1,
@@ -140,6 +171,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.SEARCH_ENGINE]: {
     nodeType: ArchNodeType.SEARCH_ENGINE,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.SEARCH_ENGINE],
     maxRPS: 5000,
     baseLatencyMs: 50,
     latencyStdDevMs: 20,
@@ -153,6 +185,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.STREAM_PROCESSOR]: {
     nodeType: ArchNodeType.STREAM_PROCESSOR,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.STREAM_PROCESSOR],
     maxRPS: 10000,
     baseLatencyMs: 20,
     latencyStdDevMs: 10,
@@ -168,6 +201,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.ML_MODEL_SERVICE]: {
     nodeType: ArchNodeType.ML_MODEL_SERVICE,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.ML_MODEL_SERVICE],
     maxRPS: 2000,
     baseLatencyMs: 150,
     latencyStdDevMs: 50,
@@ -183,6 +217,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.PAYMENT_GATEWAY]: {
     nodeType: ArchNodeType.PAYMENT_GATEWAY,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.PAYMENT_GATEWAY],
     maxRPS: 5000,
     baseLatencyMs: 300,
     latencyStdDevMs: 100,
@@ -196,6 +231,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.NOTIFICATION_SERVICE]: {
     nodeType: ArchNodeType.NOTIFICATION_SERVICE,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.NOTIFICATION_SERVICE],
     maxRPS: 10000,
     baseLatencyMs: 50,
     latencyStdDevMs: 20,
@@ -210,6 +246,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.ANALYTICS_SERVICE]: {
     nodeType: ArchNodeType.ANALYTICS_SERVICE,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.ANALYTICS_SERVICE],
     maxRPS: 5000,
     baseLatencyMs: 100,
     latencyStdDevMs: 50,
@@ -225,6 +262,7 @@ export const NODE_DEFAULTS: Record<ArchNodeType, Record<string, unknown>> = {
   },
   [ArchNodeType.REAL_TIME_DB]: {
     nodeType: ArchNodeType.REAL_TIME_DB,
+    tooltip: NODE_TOOLTIPS[ArchNodeType.REAL_TIME_DB],
     maxRPS: 20000,
     baseLatencyMs: 10,
     latencyStdDevMs: 5,
@@ -257,3 +295,5 @@ export const NODE_LABELS: Record<ArchNodeType, string> = {
   [ArchNodeType.ANALYTICS_SERVICE]: 'Analytics Service',
   [ArchNodeType.REAL_TIME_DB]: 'Real-time Database',
 };
+
+

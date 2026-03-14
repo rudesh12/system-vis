@@ -8,9 +8,18 @@ import {
   type EdgeChange,
   type Connection,
 } from '@xyflow/react';
-import type { ArchNodeData, ArchEdgeData } from '@system-vis/shared';
+import { NODE_TOOLTIPS, type ArchNodeData, type ArchEdgeData } from '@system-vis/shared';
 
 let nodeIdCounter = 0;
+
+function withTooltip(data: ArchNodeData): ArchNodeData {
+  const tooltip =
+    typeof data.tooltip === 'string' && data.tooltip.trim().length > 0
+      ? data.tooltip
+      : NODE_TOOLTIPS[data.nodeType];
+  return { ...data, tooltip } as ArchNodeData;
+}
+
 
 interface ArchitectureState {
   nodes: Node<ArchNodeData>[];
@@ -51,7 +60,7 @@ export const useArchitectureStore = create<ArchitectureState>((set, get) => ({
       id,
       type,
       position,
-      data,
+      data: withTooltip(data),
     };
     set((state) => ({ nodes: [...state.nodes, newNode] }));
   },
@@ -119,8 +128,9 @@ export const useArchitectureStore = create<ArchitectureState>((set, get) => ({
   setArchitectureName: (name) => set({ architectureName: name }),
 
   loadArchitecture: (nodes, edges, name) => {
+    const hydratedNodes = nodes.map((n) => ({ ...n, data: withTooltip(n.data) }));
     set({
-      nodes,
+      nodes: hydratedNodes,
       edges,
       selectedNodeId: null,
       architectureName: name ?? 'Untitled Architecture',
@@ -140,3 +150,4 @@ export const useArchitectureStore = create<ArchitectureState>((set, get) => ({
     return labels;
   },
 }));
+

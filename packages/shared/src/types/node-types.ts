@@ -45,6 +45,7 @@ export interface BaseNodeProps {
   /** Optional per-node custom request/response template. When provided by AI-generated designs,
    *  this takes priority over the generic type-based template. */
   requestResponseTemplate?: NodeRequestResponseTemplate;
+  tooltip?: string;
 }
 
 export interface CDNNodeProps extends BaseNodeProps {
@@ -208,3 +209,5 @@ export interface ArchNode {
   position: { x: number; y: number };
   data: ArchNodeData;
 }
+
+
