@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build --workspace=packages/shared && npm run build --workspace=apps/web",
+  "devCommand": "npm run dev --workspace=apps/web",
+  "framework": "nextjs",
+  "outputDirectory": "apps/web/.next",
+  "functions": {
+    "apps/web/src/app/api/**/*.ts": {
+      "maxDuration": 60
+    }
+  }
+}
