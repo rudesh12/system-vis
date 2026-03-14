@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -9,14 +9,67 @@ import { useArchitectureStore } from '@/stores/architecture-store';
 import { SIMULATION_PRESETS } from '@system-vis/shared';
 import { getSocket } from '@/lib/socket';
 import { BottleneckAdvisorPanel } from '@/components/simulation/bottleneck-advisor-panel';
+import {
+  SCENARIO_INJECTORS,
+  type ScenarioInjectorId,
+  applyScenarioInjector,
+  previewScenarioInjectorImpact,
+} from '@/lib/scenario-injectors';
+import type { ArchEdgeData, ArchNodeData } from '@system-vis/shared';
+import type { Edge, Node } from '@xyflow/react';
+
+interface ScenarioSnapshot {
+  nodes: Node<ArchNodeData>[];
+  edges: Edge<ArchEdgeData>[];
+  architectureName: string;
+}
+
+function cloneScenarioSnapshot(
+  nodes: Node<ArchNodeData>[],
+  edges: Edge<ArchEdgeData>[],
+  architectureName: string
+): ScenarioSnapshot {
+  return {
+    nodes: nodes.map((node) => ({
+      ...node,
+      data: { ...(node.data as Record<string, unknown>) } as ArchNodeData,
+    })),
+    edges: edges.map((edge) => ({
+      ...edge,
+      data: { ...(edge.data as Record<string, unknown>) } as ArchEdgeData,
+    })),
+    architectureName,
+  };
+}
 
 export function SimulationControlPanel() {
-  const { status, currentTimeSec, globalMetrics, bottlenecks, setStatus, setTrafficPattern, applyTick, reset, setSimulationId, setNodeLabels } = useSimulationStore();
-  const { nodes, edges, getNodeLabels } = useArchitectureStore();
+  const {
+    status,
+    currentTimeSec,
+    globalMetrics,
+    bottlenecks,
+    setStatus,
+    setTrafficPattern,
+    applyTick,
+    reset,
+    setSimulationId,
+    setNodeLabels,
+  } = useSimulationStore();
+  const {
+    nodes,
+    edges,
+    getNodeLabels,
+    loadArchitecture,
+    architectureName,
+  } = useArchitectureStore();
 
   const [internalTrafficEnabled, setInternalTrafficEnabled] = useState(false);
   const [internalTrafficRPS, setInternalTrafficRPS] = useState(1000);
   const [internalTrafficPattern, setInternalTrafficPattern] = useState('wave');
+
+  const [selectedScenario, setSelectedScenario] = useState<ScenarioInjectorId>('retry_storm');
+  const [scenarioSummary, setScenarioSummary] = useState<string | null>(null);
+  const [scenarioSnapshot, setScenarioSnapshot] = useState<ScenarioSnapshot | null>(null);
 
   const handlePresetChange = useCallback((value: string | null) => {
     if (!value) return;
@@ -66,7 +119,7 @@ export function SimulationControlPanel() {
               loadPattern: buildLoadPattern(internalTrafficPattern),
             },
             external: {
-              enabled: false, // Disable external when using internal
+              enabled: false,
             },
           },
         }
@@ -78,9 +131,7 @@ export function SimulationControlPanel() {
     });
 
     socket.on('sim:initialized', ({ simulationId }: { simulationId: string }) => {
-      console.log('✅ Simulation Started!');
-      console.log('Simulation ID:', simulationId);
-      console.log('📋 Copy this ID to locust-loadtest.py SIMULATION_ID variable');
+      console.log('Simulation started', simulationId);
       setSimulationId(simulationId);
       setNodeLabels(getNodeLabels());
       setStatus('running');
@@ -97,7 +148,18 @@ export function SimulationControlPanel() {
     });
 
     setStatus('running');
-  }, [nodes, edges, setStatus, applyTick, setSimulationId, setNodeLabels, getNodeLabels, internalTrafficEnabled, internalTrafficRPS, internalTrafficPattern]);
+  }, [
+    nodes,
+    edges,
+    setStatus,
+    applyTick,
+    setSimulationId,
+    setNodeLabels,
+    getNodeLabels,
+    internalTrafficEnabled,
+    internalTrafficRPS,
+    internalTrafficPattern,
+  ]);
 
   const handleStop = useCallback(() => {
     const socket = getSocket();
@@ -113,6 +175,31 @@ export function SimulationControlPanel() {
     reset();
   }, [handleStop, reset]);
 
+  const handleApplyScenario = useCallback(() => {
+    if (nodes.length === 0) return;
+
+    if (!scenarioSnapshot) {
+      setScenarioSnapshot(cloneScenarioSnapshot(nodes, edges, architectureName));
+    }
+
+    const result = applyScenarioInjector(nodes, edges, selectedScenario);
+    loadArchitecture(result.nodes, result.edges, architectureName);
+    setScenarioSummary(result.summary);
+  }, [nodes, edges, selectedScenario, loadArchitecture, architectureName, scenarioSnapshot]);
+
+  const handleRevertScenario = useCallback(() => {
+    if (!scenarioSnapshot) return;
+
+    loadArchitecture(scenarioSnapshot.nodes, scenarioSnapshot.edges, scenarioSnapshot.architectureName);
+    setScenarioSummary('Scenario changes reverted to the pre-injector snapshot.');
+    setScenarioSnapshot(null);
+  }, [scenarioSnapshot, loadArchitecture]);
+
+  const scenarioPreview = useMemo(() => {
+    if (nodes.length === 0) return null;
+    return previewScenarioInjectorImpact(nodes, edges, selectedScenario);
+  }, [nodes, edges, selectedScenario]);
+
   const statusColors: Record<string, string> = {
     idle: 'bg-muted text-muted-foreground',
     running: 'bg-green-100 text-green-800',
@@ -123,7 +210,7 @@ export function SimulationControlPanel() {
 
   return (
     <div className="border-b bg-card p-3 space-y-3">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Select onValueChange={handlePresetChange} defaultValue="Moderate Load" disabled={internalTrafficEnabled}>
           <SelectTrigger className="w-48 h-8 text-sm">
             <SelectValue placeholder="Select traffic" />
@@ -131,7 +218,7 @@ export function SimulationControlPanel() {
           <SelectContent>
             {SIMULATION_PRESETS.map((preset) => (
               <SelectItem key={preset.name} value={preset.name}>
-                {preset.name} — {preset.description}
+                {preset.name} - {preset.description}
               </SelectItem>
             ))}
           </SelectContent>
@@ -154,8 +241,7 @@ export function SimulationControlPanel() {
         <Badge className={statusColors[status]}>{status}</Badge>
       </div>
 
-      {/* Internal Traffic Generation Controls */}
-      <div className="border-t pt-3 flex items-center gap-3">
+      <div className="border-t pt-3 flex items-center gap-3 flex-wrap">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -199,6 +285,53 @@ export function SimulationControlPanel() {
               </Select>
             </div>
           </>
+        )}
+      </div>
+
+      <div className="border-t pt-3 space-y-2">
+        <div className="text-sm font-medium">Scenario Injectors</div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={selectedScenario} onValueChange={(value) => setSelectedScenario(value as ScenarioInjectorId)}>
+            <SelectTrigger className="w-64 h-8 text-sm">
+              <SelectValue placeholder="Select scenario" />
+            </SelectTrigger>
+            <SelectContent>
+              {SCENARIO_INJECTORS.map((scenario) => (
+                <SelectItem key={scenario.id} value={scenario.id}>
+                  {scenario.name} ({scenario.category})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button size="sm" variant="secondary" onClick={handleApplyScenario} disabled={nodes.length === 0}>
+            Apply Scenario
+          </Button>
+
+          <Button size="sm" variant="outline" onClick={handleRevertScenario} disabled={!scenarioSnapshot}>
+            Revert Scenario
+          </Button>
+        </div>
+
+        {scenarioPreview && (
+          <div className="rounded border bg-muted/20 p-2 text-xs text-muted-foreground space-y-1">
+            <div>{scenarioPreview.summary}</div>
+            <div>
+              Estimated impact: {scenarioPreview.changedNodeCount} node(s), {scenarioPreview.changedEdgeCount} edge(s)
+            </div>
+            {scenarioPreview.changedNodeLabels.length > 0 && (
+              <div>Nodes: {scenarioPreview.changedNodeLabels.join(', ')}</div>
+            )}
+            {scenarioPreview.changedEdgeLabels.length > 0 && (
+              <div>Edges: {scenarioPreview.changedEdgeLabels.join(', ')}</div>
+            )}
+          </div>
+        )}
+
+        {scenarioSummary && (
+          <div className="rounded border bg-muted/30 p-2 text-xs">
+            {scenarioSummary}
+          </div>
         )}
       </div>
 
