@@ -12,10 +12,13 @@ interface BaseNodeComponentProps {
   children?: React.ReactNode;
 }
 
-const statusColors = {
+const statusColors: Record<BaseNodeProps['healthStatus'], string> = {
   healthy: 'bg-green-500',
   degraded: 'bg-yellow-500',
+  saturated: 'bg-orange-500',
+  partially_down: 'bg-amber-600',
   critical: 'bg-red-500',
+  down: 'bg-gray-500',
 };
 
 export function BaseNode({ data, icon, color, children }: BaseNodeComponentProps) {
@@ -34,6 +37,9 @@ export function BaseNode({ data, icon, color, children }: BaseNodeComponentProps
             'rounded-lg border-2 bg-card shadow-md min-w-[160px]',
             data.healthStatus === 'critical' && 'border-red-500 shadow-red-500/25',
             data.healthStatus === 'degraded' && 'border-yellow-500 shadow-yellow-500/25',
+            data.healthStatus === 'saturated' && 'border-orange-500 shadow-orange-500/25',
+            data.healthStatus === 'partially_down' && 'border-amber-600 shadow-amber-600/25',
+            data.healthStatus === 'down' && 'border-gray-500 shadow-gray-500/20',
             data.healthStatus === 'healthy' && 'border-border'
           )}
         >

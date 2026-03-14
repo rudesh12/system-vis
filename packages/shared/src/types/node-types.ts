@@ -41,10 +41,16 @@ export interface BaseNodeProps {
   latencyStdDevMs: number;
   failureRate: number;
   maxConcurrentRequests: number;
-  healthStatus: 'healthy' | 'degraded' | 'critical';
+  healthStatus: 'healthy' | 'degraded' | 'saturated' | 'partially_down' | 'critical' | 'down';
   /** Optional per-node custom request/response template. When provided by AI-generated designs,
    *  this takes priority over the generic type-based template. */
   requestResponseTemplate?: NodeRequestResponseTemplate;
+  // Client-side resilience policy for downstream calls.
+  requestTimeoutMs?: number;
+  retryCount?: number;
+  retryBackoffMs?: number;
+  retryBackoffStrategy?: 'fixed' | 'exponential';
+  circuitBreakerThreshold?: number;
   tooltip?: string;
 }
 
@@ -209,5 +215,6 @@ export interface ArchNode {
   position: { x: number; y: number };
   data: ArchNodeData;
 }
+
 
 

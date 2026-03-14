@@ -26,8 +26,14 @@ export function NodeConfigPanel() {
     updateNodeData(node.id, { [field]: value } as Partial<ArchNodeData>);
   };
 
+  const requestTimeoutMs = Number((data as { requestTimeoutMs?: number }).requestTimeoutMs ?? 1200);
+  const retryCount = Number((data as { retryCount?: number }).retryCount ?? 2);
+  const retryBackoffMs = Number((data as { retryBackoffMs?: number }).retryBackoffMs ?? 120);
+  const retryBackoffStrategy =
+    ((data as { retryBackoffStrategy?: 'fixed' | 'exponential' }).retryBackoffStrategy ?? 'exponential');
+
   return (
-    <div className="w-72 border-l bg-card flex flex-col">
+    <div className="w-72 h-full min-h-0 border-l bg-card flex flex-col">
       <div className="p-3 border-b flex items-center justify-between">
         <h3 className="font-semibold text-sm">Properties</h3>
         <Button
@@ -39,7 +45,7 @@ export function NodeConfigPanel() {
           ✕
         </Button>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-3 space-y-4">
           {/* Label */}
           <div className="space-y-1.5">
@@ -95,6 +101,60 @@ export function NodeConfigPanel() {
                 onChange={(e) => updateField('maxConcurrentRequests', Number(e.target.value))}
                 className="h-8 text-sm"
               />
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Resilience Policy */}
+          <div className="space-y-3">
+            <div className="text-xs font-medium text-muted-foreground">Resilience</div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Request Timeout (ms)</Label>
+              <Input
+                type="number"
+                value={requestTimeoutMs}
+                onChange={(e) => updateField('requestTimeoutMs', Number(e.target.value))}
+                className="h-8 text-sm"
+                min={1}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Retry Count</Label>
+              <Input
+                type="number"
+                value={retryCount}
+                onChange={(e) => updateField('retryCount', Number(e.target.value))}
+                className="h-8 text-sm"
+                min={0}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Retry Backoff (ms)</Label>
+              <Input
+                type="number"
+                value={retryBackoffMs}
+                onChange={(e) => updateField('retryBackoffMs', Number(e.target.value))}
+                className="h-8 text-sm"
+                min={1}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Retry Strategy</Label>
+              <Select
+                value={retryBackoffStrategy}
+                onValueChange={(v) => updateField('retryBackoffStrategy', v)}
+              >
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">Fixed</SelectItem>
+                  <SelectItem value="exponential">Exponential</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -294,3 +354,4 @@ export function NodeConfigPanel() {
     </div>
   );
 }
+

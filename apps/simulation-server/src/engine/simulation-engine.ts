@@ -1,5 +1,5 @@
-import type { Architecture, SimulationConfig, SimulationTickResult, TrafficPattern } from '@system-vis/shared';
-import { ArchNodeType } from '@system-vis/shared';
+import type { Architecture, SimulationConfig, SimulationTickResult, SimEvent, ArchEdgeData, BaseNodeProps } from '@system-vis/shared';
+import { ArchNodeType, SimEventType } from '@system-vis/shared';
 import { EventQueue } from './event-queue.js';
 import { generateArrivals, InternalTrafficGenerator } from './traffic-generator.js';
 import { collectMetrics } from './metrics-collector.js';
@@ -21,9 +21,26 @@ import { NotificationServiceModel } from './models/notification-service-model.js
 import { AnalyticsServiceModel } from './models/analytics-service-model.js';
 import { RealTimeDBModel } from './models/realtime-db-model.js';
 
+const DEFAULT_EDGE: Required<Pick<ArchEdgeData, 'latencyOverheadMs' | 'bandwidthMbps' | 'jitterMs' | 'packetLossRate' | 'disconnectRate' | 'timeoutProbability'>> = {
+  latencyOverheadMs: 1,
+  bandwidthMbps: 1000,
+  jitterMs: 0,
+  packetLossRate: 0,
+  disconnectRate: 0,
+  timeoutProbability: 0,
+};
+
+const DEFAULT_RETRY_POLICY = {
+  requestTimeoutMs: 1200,
+  retryCount: 2,
+  retryBackoffMs: 120,
+  retryBackoffStrategy: 'exponential' as const,
+};
+
 export class SimulationEngine {
   private eventQueue = new EventQueue();
   private models = new Map<string, ComponentModel>();
+  private edgeMap = new Map<string, ArchEdgeData>();
   private config: SimulationConfig;
   private architecture: Architecture;
   private internalTrafficGenerator?: InternalTrafficGenerator;
@@ -36,8 +53,19 @@ export class SimulationEngine {
   constructor(architecture: Architecture, config: SimulationConfig) {
     this.architecture = architecture;
     this.config = config;
+    this._initEdgeMap();
     this._initModels();
     this._initTrafficGenerators();
+  }
+
+  private _edgeKey(sourceNodeId: string, targetNodeId: string): string {
+    return `${sourceNodeId}->${targetNodeId}`;
+  }
+
+  private _initEdgeMap(): void {
+    for (const edge of this.architecture.edges) {
+      this.edgeMap.set(this._edgeKey(edge.source, edge.target), edge.data);
+    }
   }
 
   private _initTrafficGenerators(): void {
@@ -108,6 +136,111 @@ export class SimulationEngine {
     }
   }
 
+  private _boundedRate(value: number | undefined): number {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(1, value ?? 0));
+  }
+
+  private _retryDelayMs(backoffMs: number, strategy: 'fixed' | 'exponential', attempt: number): number {
+    const safeBackoff = Math.max(1, backoffMs);
+    if (strategy === 'exponential') {
+      return safeBackoff * Math.pow(2, attempt);
+    }
+    return safeBackoff;
+  }
+
+  private _computeNetworkDelayMs(edge: Pick<ArchEdgeData, 'latencyOverheadMs' | 'bandwidthMbps' | 'jitterMs'>): number {
+    const baseLatency = edge.latencyOverheadMs ?? DEFAULT_EDGE.latencyOverheadMs;
+    const jitter = edge.jitterMs ?? DEFAULT_EDGE.jitterMs;
+    const jitterDelta = jitter > 0 ? (Math.random() * 2 - 1) * jitter : 0;
+
+    // Simple transfer delay estimate with 4KB payload.
+    const bandwidthMbps = Math.max(0.1, edge.bandwidthMbps ?? DEFAULT_EDGE.bandwidthMbps);
+    const transferDelayMs = 32 / bandwidthMbps;
+
+    return Math.max(0, baseLatency + jitterDelta + transferDelayMs);
+  }
+
+  private _recordNetworkFailure(targetNodeId: string): void {
+    const targetModel = this.models.get(targetNodeId);
+    if (targetModel) {
+      targetModel.state.totalFailed++;
+    }
+    this.failedRequests++;
+  }
+
+  private _applyRouteNetworkEffects(sourceEvent: SimEvent, routeEvent: SimEvent): SimEvent[] {
+    const sourceNodeId = sourceEvent.nodeId;
+    const targetNodeId = routeEvent.nodeId;
+
+    const sourceModel = this.models.get(sourceNodeId);
+    const sourceConfig = (sourceModel?.getConfig() ?? {}) as BaseNodeProps;
+
+    const requestTimeoutMs = Number(sourceConfig.requestTimeoutMs ?? DEFAULT_RETRY_POLICY.requestTimeoutMs);
+    const retryCount = Math.max(0, Number(sourceConfig.retryCount ?? DEFAULT_RETRY_POLICY.retryCount));
+    const retryBackoffMs = Math.max(1, Number(sourceConfig.retryBackoffMs ?? DEFAULT_RETRY_POLICY.retryBackoffMs));
+    const retryBackoffStrategy =
+      sourceConfig.retryBackoffStrategy === 'fixed' || sourceConfig.retryBackoffStrategy === 'exponential'
+        ? sourceConfig.retryBackoffStrategy
+        : DEFAULT_RETRY_POLICY.retryBackoffStrategy;
+
+    const edge = this.edgeMap.get(this._edgeKey(sourceNodeId, targetNodeId)) ?? DEFAULT_EDGE;
+
+    const packetLossRate = this._boundedRate((edge.packetLossRate as number | undefined) ?? DEFAULT_EDGE.packetLossRate);
+    const disconnectRate = this._boundedRate((edge.disconnectRate as number | undefined) ?? DEFAULT_EDGE.disconnectRate);
+    const timeoutProbability = this._boundedRate((edge.timeoutProbability as number | undefined) ?? DEFAULT_EDGE.timeoutProbability);
+
+    const networkDelayMs = this._computeNetworkDelayMs(edge);
+    const attempt = Number(routeEvent.metadata?.retryAttempt ?? 0);
+
+    const packetLoss = Math.random() < packetLossRate;
+    const disconnected = !packetLoss && Math.random() < disconnectRate;
+    const probabilisticTimeout = !packetLoss && !disconnected && Math.random() < timeoutProbability;
+    const latencyTimeout = requestTimeoutMs > 0 && networkDelayMs > requestTimeoutMs;
+
+    let failureReason: string | null = null;
+    if (packetLoss) failureReason = 'packet_loss';
+    else if (disconnected) failureReason = 'intermittent_disconnect';
+    else if (probabilisticTimeout) failureReason = 'timeout_probability';
+    else if (latencyTimeout) failureReason = 'timeout_latency';
+
+    if (failureReason) {
+      if (attempt < retryCount) {
+        const nextAttempt = attempt + 1;
+        const retryDelayMs = this._retryDelayMs(retryBackoffMs, retryBackoffStrategy, attempt);
+
+        return [{
+          ...routeEvent,
+          id: `${routeEvent.id}_retry_${nextAttempt}`,
+          timestamp: sourceEvent.timestamp + retryDelayMs,
+          metadata: {
+            ...(routeEvent.metadata ?? {}),
+            sourceNodeId,
+            targetNodeId,
+            retryAttempt: nextAttempt,
+            retryReason: failureReason,
+            priorDelayMs: networkDelayMs,
+          },
+        }];
+      }
+
+      this._recordNetworkFailure(targetNodeId);
+      return [];
+    }
+
+    return [{
+      ...routeEvent,
+      timestamp: routeEvent.timestamp + networkDelayMs,
+      metadata: {
+        ...(routeEvent.metadata ?? {}),
+        sourceNodeId,
+        targetNodeId,
+        retryAttempt: attempt,
+        networkDelayMs,
+      },
+    }];
+  }
+
   tick(): SimulationTickResult {
     this.tickCount++;
     const tickDurationMs = this.config.tickIntervalMs;
@@ -154,18 +287,24 @@ export class SimulationEngine {
 
       const resultEvents = model.handleEvent(event);
       for (const re of resultEvents) {
-        if (re.type === 'REQUEST_COMPLETE' as any) {
+        if (re.type === SimEventType.REQUEST_ROUTE) {
+          const routed = this._applyRouteNetworkEffects(event, re);
+          for (const routedEvent of routed) {
+            this.eventQueue.push(routedEvent);
+          }
+          continue;
+        }
+
+        if (re.type === SimEventType.REQUEST_COMPLETE) {
           if (re.metadata?.success === false) {
             this.failedRequests++;
           } else {
             this.completedRequests++;
           }
-        } else if (re.type === 'REQUEST_FAIL' as any) {
-          // Will be processed by the model
-          this.eventQueue.push(re);
-        } else {
-          this.eventQueue.push(re);
+          continue;
         }
+
+        this.eventQueue.push(re);
       }
     }
 
@@ -183,11 +322,9 @@ export class SimulationEngine {
 
     // 8. Compute global metrics
     const allLatencies: number[] = [];
-    let totalRPS = 0;
     let totalErrors = 0;
     let totalProcessed = 0;
     for (const m of Object.values(componentMetrics)) {
-      totalRPS += m.requestsPerSecond;
       totalErrors += m.errorCount;
       totalProcessed += m.throughput;
       allLatencies.push(m.latencyP50Ms);
@@ -220,3 +357,4 @@ export class SimulationEngine {
     return this.simulationTimeMs;
   }
 }
+

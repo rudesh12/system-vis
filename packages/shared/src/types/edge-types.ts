@@ -5,6 +5,11 @@ export interface ArchEdgeData {
   latencyOverheadMs: number;
   encrypted: boolean;
   label?: string;
+  // Network-condition controls (advanced mode)
+  jitterMs?: number;
+  packetLossRate?: number;
+  disconnectRate?: number;
+  timeoutProbability?: number;
 }
 
 export interface ArchEdge {

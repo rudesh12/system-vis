@@ -283,6 +283,10 @@ function buildFallbackEdges(nodes: ArchNode[]): ArchEdge[] {
         bandwidthMbps: 1000,
         latencyOverheadMs: 2,
         encrypted: true,
+        jitterMs: 0,
+        packetLossRate: 0,
+        disconnectRate: 0,
+        timeoutProbability: 0,
       },
     });
   }
@@ -361,6 +365,10 @@ export function parseTerraformArchitecture(terraform: string, fileName?: string)
           bandwidthMbps: 1000,
           latencyOverheadMs: 2,
           encrypted: true,
+          jitterMs: 0,
+          packetLossRate: 0,
+          disconnectRate: 0,
+          timeoutProbability: 0,
         },
       });
     }
@@ -374,3 +382,5 @@ export function parseTerraformArchitecture(terraform: string, fileName?: string)
     edges: finalEdges,
   };
 }
+
+

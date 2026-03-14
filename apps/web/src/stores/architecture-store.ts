@@ -12,14 +12,40 @@ import { NODE_TOOLTIPS, type ArchNodeData, type ArchEdgeData } from '@system-vis
 
 let nodeIdCounter = 0;
 
-function withTooltip(data: ArchNodeData): ArchNodeData {
+function withNodeDefaults(data: ArchNodeData): ArchNodeData {
   const tooltip =
     typeof data.tooltip === 'string' && data.tooltip.trim().length > 0
       ? data.tooltip
       : NODE_TOOLTIPS[data.nodeType];
-  return { ...data, tooltip } as ArchNodeData;
+
+  return {
+    ...data,
+    tooltip,
+    requestTimeoutMs: Number((data as { requestTimeoutMs?: number }).requestTimeoutMs ?? 1200),
+    retryCount: Number((data as { retryCount?: number }).retryCount ?? 2),
+    retryBackoffMs: Number((data as { retryBackoffMs?: number }).retryBackoffMs ?? 120),
+    retryBackoffStrategy:
+      ((data as { retryBackoffStrategy?: 'fixed' | 'exponential' }).retryBackoffStrategy ?? 'exponential'),
+    circuitBreakerThreshold: Number((data as { circuitBreakerThreshold?: number }).circuitBreakerThreshold ?? 5),
+  } as ArchNodeData;
 }
 
+function withEdgeDefaults(data?: ArchEdgeData): ArchEdgeData {
+  const safeData: ArchEdgeData = data ?? {
+    protocol: 'http',
+    bandwidthMbps: 1000,
+    latencyOverheadMs: 1,
+    encrypted: true,
+  };
+
+  return {
+    ...safeData,
+    jitterMs: Number((safeData.jitterMs as number | undefined) ?? 0),
+    packetLossRate: Number((safeData.packetLossRate as number | undefined) ?? 0),
+    disconnectRate: Number((safeData.disconnectRate as number | undefined) ?? 0),
+    timeoutProbability: Number((safeData.timeoutProbability as number | undefined) ?? 0),
+  };
+}
 
 interface ArchitectureState {
   nodes: Node<ArchNodeData>[];
@@ -60,7 +86,7 @@ export const useArchitectureStore = create<ArchitectureState>((set, get) => ({
       id,
       type,
       position,
-      data: withTooltip(data),
+      data: withNodeDefaults(data),
     };
     set((state) => ({ nodes: [...state.nodes, newNode] }));
   },
@@ -93,12 +119,16 @@ export const useArchitectureStore = create<ArchitectureState>((set, get) => ({
       target: connection.target!,
       sourceHandle: connection.sourceHandle ?? undefined,
       targetHandle: connection.targetHandle ?? undefined,
-      data: {
+      data: withEdgeDefaults({
         protocol: 'http',
         bandwidthMbps: 1000,
         latencyOverheadMs: 1,
         encrypted: true,
-      },
+        jitterMs: 0,
+        packetLossRate: 0,
+        disconnectRate: 0,
+        timeoutProbability: 0,
+      }),
     };
     set((state) => ({
       edges: state.edges.some((e) => e.id === id)
@@ -128,10 +158,12 @@ export const useArchitectureStore = create<ArchitectureState>((set, get) => ({
   setArchitectureName: (name) => set({ architectureName: name }),
 
   loadArchitecture: (nodes, edges, name) => {
-    const hydratedNodes = nodes.map((n) => ({ ...n, data: withTooltip(n.data) }));
+    const hydratedNodes = nodes.map((n) => ({ ...n, data: withNodeDefaults(n.data) }));
+    const hydratedEdges = edges.map((e) => ({ ...e, data: withEdgeDefaults(e.data) }));
+
     set({
       nodes: hydratedNodes,
-      edges,
+      edges: hydratedEdges,
       selectedNodeId: null,
       architectureName: name ?? 'Untitled Architecture',
     });
