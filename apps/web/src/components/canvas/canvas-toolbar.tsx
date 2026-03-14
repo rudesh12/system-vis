@@ -1,15 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef } from 'react';
 import { useArchitectureStore } from '@/stores/architecture-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getSampleArchitecture } from '@/lib/sample-architecture';
 import { getDiscordArchitecture, getUberArchitecture, getNetflixArchitecture, getAmazonArchitecture, getStripeArchitecture } from '@/lib/sample-architectures';
+import { parseTerraformArchitecture } from '@/lib/terraform-import';
 
 export function CanvasToolbar() {
-  const [sampleType, setSampleType] = useState<string>('ecommerce');
+  const terraformFileInputRef = useRef<HTMLInputElement>(null);
   const { architectureName, setArchitectureName, nodes, edges, loadArchitecture, clearArchitecture } =
     useArchitectureStore();
 
@@ -32,38 +32,40 @@ export function CanvasToolbar() {
   };
 
   const handleLoadSample = (type: string) => {
-    let nodes, edges, name;
+    let sampleNodes;
+    let sampleEdges;
+    let sampleName;
 
     if (type === 'discord') {
       const arch = getDiscordArchitecture();
-      nodes = arch.nodes;
-      edges = arch.edges;
-      name = arch.name;
+      sampleNodes = arch.nodes;
+      sampleEdges = arch.edges;
+      sampleName = arch.name;
     } else if (type === 'uber') {
       const arch = getUberArchitecture();
-      nodes = arch.nodes;
-      edges = arch.edges;
-      name = arch.name;
+      sampleNodes = arch.nodes;
+      sampleEdges = arch.edges;
+      sampleName = arch.name;
     } else if (type === 'netflix') {
       const arch = getNetflixArchitecture();
-      nodes = arch.nodes;
-      edges = arch.edges;
-      name = arch.name;
+      sampleNodes = arch.nodes;
+      sampleEdges = arch.edges;
+      sampleName = arch.name;
     } else if (type === 'stripe') {
       const arch = getStripeArchitecture();
-      nodes = arch.nodes;
-      edges = arch.edges;
-      name = arch.name;
+      sampleNodes = arch.nodes;
+      sampleEdges = arch.edges;
+      sampleName = arch.name;
     } else {
       // ecommerce (Amazon) is default
       const arch = getAmazonArchitecture();
-      nodes = arch.nodes;
-      edges = arch.edges;
-      name = arch.name;
+      sampleNodes = arch.nodes;
+      sampleEdges = arch.edges;
+      sampleName = arch.name;
     }
 
-    loadArchitecture(nodes, edges, name);
-    setArchitectureName(name);
+    loadArchitecture(sampleNodes, sampleEdges, sampleName);
+    setArchitectureName(sampleName);
   };
 
   const handleExportJSON = () => {
@@ -77,6 +79,27 @@ export function CanvasToolbar() {
     URL.revokeObjectURL(url);
   };
 
+  const handleTerraformButtonClick = () => {
+    terraformFileInputRef.current?.click();
+  };
+
+  const handleTerraformFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const terraform = await file.text();
+      const parsed = parseTerraformArchitecture(terraform, file.name);
+      loadArchitecture(parsed.nodes, parsed.edges, parsed.name);
+      setArchitectureName(parsed.name);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to parse Terraform file.';
+      window.alert(message);
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   return (
     <div className="absolute top-2 left-2 right-2 z-10 flex items-center gap-2">
       <Input
@@ -85,7 +108,7 @@ export function CanvasToolbar() {
         className="w-56 h-8 text-sm bg-card"
       />
 
-      <Select onValueChange={(value: string | null) => { if (value) { setSampleType(value); handleLoadSample(value); } }}>
+      <Select onValueChange={(value: string | null) => { if (value) { handleLoadSample(value); } }}>
         <SelectTrigger className="w-48 h-8 text-sm">
           <SelectValue placeholder="Load sample architecture" />
         </SelectTrigger>
@@ -107,6 +130,16 @@ export function CanvasToolbar() {
       <Button variant="outline" size="sm" onClick={handleExportJSON}>
         Export
       </Button>
+      <Button variant="outline" size="sm" onClick={handleTerraformButtonClick}>
+        Upload Terraform
+      </Button>
+      <input
+        ref={terraformFileInputRef}
+        type="file"
+        accept=".tf,.hcl,text/plain"
+        className="hidden"
+        onChange={handleTerraformFileUpload}
+      />
       <div className="flex-1" />
       <Button variant="destructive" size="sm" onClick={clearArchitecture}>
         Clear
