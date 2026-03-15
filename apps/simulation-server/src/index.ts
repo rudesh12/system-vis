@@ -7,13 +7,24 @@ import { handleTrafficInjection, getSimulationStatus } from './handlers/traffic-
 
 const PORT = process.env.SIMULATION_SERVER_PORT || 3001;
 
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:8089',
+  process.env.NEXT_DEPLOYED_URL,
+  ...(process.env.ALLOWED_ORIGINS?.split(',') ?? []),
+]
+  .filter((origin): origin is string => typeof origin === 'string' && origin.trim().length > 0)
+  .map((origin) => origin.trim())
+  .filter((origin, index, arr) => arr.indexOf(origin) === index);
+
 const app = express();
 app.use(express.json());
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8089'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
   },
   transports: ['websocket', 'polling'],
@@ -38,7 +49,10 @@ io.on('connection', (socket) => {
 
 httpServer.listen(PORT, () => {
   console.log(`Simulation server running on port ${PORT}`);
+  console.log(`Allowed origins: ${allowedOrigins.join(', ') || '(none)'}`);
   console.log(`- WebSocket: ws://localhost:${PORT}`);
   console.log(`- HTTP API: http://localhost:${PORT}/api/traffic/inject`);
   console.log(`- Health: http://localhost:${PORT}/health`);
 });
+
+
